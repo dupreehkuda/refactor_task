@@ -11,8 +11,9 @@ import (
 )
 
 type storage struct {
-	mtx  sync.Mutex
-	file string
+	mtx   sync.Mutex
+	file  string
+	store UserStore
 }
 
 // New creates new instance of storage
@@ -24,38 +25,31 @@ func New(filepath string) *storage {
 	defer file.Close()
 
 	return &storage{
-		file: filepath,
+		file:  filepath,
+		store: UserStore{},
 	}
 }
 
 // readList reads JSON and returns UserStore instance
-func (s *storage) readList() (UserStore, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
+func (s *storage) readList() error {
 	f, err := os.ReadFile(s.file)
 	if err != nil {
 		log.Printf("Error occurred reading file: %v", err)
-		return UserStore{}, err
+		return err
 	}
 
-	store := UserStore{}
-
-	err = json.Unmarshal(f, &store)
+	err = json.Unmarshal(f, &s.store)
 	if err != nil {
 		log.Printf("Error occurred unmarshaling: %v", err)
-		return UserStore{}, err
+		return err
 	}
 
-	return store, nil
+	return nil
 }
 
 // writeList rewrites JSON by passed UserStore
-func (s *storage) writeList(store *UserStore) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	body, err := json.Marshal(&store)
+func (s *storage) writeList() error {
+	body, err := json.Marshal(&s.store)
 	if err != nil {
 		return err
 	}

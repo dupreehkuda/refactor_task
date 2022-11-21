@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	i "github.com/dupreehkuda/refactor_task/internal"
@@ -11,13 +12,16 @@ import (
 
 // SearchUsers returns list of all users
 func (s *storage) SearchUsers() ([]byte, error) {
-	store, err := s.readList()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	err := s.readList()
 	if err != nil {
 		log.Printf("Error occurred getting file: %v", err)
 		return nil, err
 	}
 
-	resp, err := json.Marshal(store.List)
+	resp, err := json.Marshal(s.store.List)
 	if err != nil {
 		log.Printf("Error occurred marshaling: %v", err)
 		return nil, err
@@ -28,27 +32,30 @@ func (s *storage) SearchUsers() ([]byte, error) {
 
 // CreateUser creates new user if name doesn't exist
 func (s *storage) CreateUser(name, email string) (string, error) {
-	store, err := s.readList()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	err := s.readList()
 	if err != nil {
 		log.Printf("Error occurred getting file: %v", err)
 		return "", err
 	}
 
-	if err = s.checkUser(name, store); err == i.UserExists {
+	if err = s.checkUser(name, s.store); err == i.UserExists {
 		return "", i.UserExists
 	}
 
-	store.Increment++
+	atomic.AddInt64(&s.store.Increment, 1)
 	newUser := User{
 		CreatedAt:   time.Now(),
 		DisplayName: name,
 		Email:       email,
 	}
 
-	id := strconv.Itoa(store.Increment)
-	store.List[id] = newUser
+	id := strconv.Itoa(int(s.store.Increment))
+	s.store.List[id] = newUser
 
-	if err = s.writeList(&store); err != nil {
+	if err = s.writeList(); err != nil {
 		log.Printf("Error occurred writing to file: %v", err)
 		return "", err
 	}
@@ -58,17 +65,20 @@ func (s *storage) CreateUser(name, email string) (string, error) {
 
 // GetUser returns a specific user
 func (s *storage) GetUser(id string) ([]byte, error) {
-	store, err := s.readList()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	err := s.readList()
 	if err != nil {
 		log.Printf("Error occurred getting file: %v", err)
 		return nil, err
 	}
 
-	if store.List[id].DisplayName == "" {
+	if s.store.List[id].DisplayName == "" {
 		return nil, i.UserNotFound
 	}
 
-	resp, err := json.Marshal(store.List[id])
+	resp, err := json.Marshal(s.store.List[id])
 	if err != nil {
 		log.Printf("Error occurred marshaling: %v", err)
 		return nil, err
@@ -79,22 +89,25 @@ func (s *storage) GetUser(id string) ([]byte, error) {
 
 // UpdateUser updates user data if exists
 func (s *storage) UpdateUser(id, name, email string) error {
-	store, err := s.readList()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	err := s.readList()
 	if err != nil {
 		log.Printf("Error occurred getting file: %v", err)
 		return err
 	}
 
-	if _, ok := store.List[id]; !ok {
+	if _, ok := s.store.List[id]; !ok {
 		return i.UserNotFound
 	}
 
-	user := store.List[id]
+	user := s.store.List[id]
 	user.DisplayName, user.Email = name, email
 
-	store.List[id] = user
+	s.store.List[id] = user
 
-	if err = s.writeList(&store); err != nil {
+	if err = s.writeList(); err != nil {
 		log.Printf("Error occurred writing to file: %v", err)
 		return err
 	}
@@ -104,19 +117,22 @@ func (s *storage) UpdateUser(id, name, email string) error {
 
 // DeleteUser removes specific user from the list
 func (s *storage) DeleteUser(id string) error {
-	store, err := s.readList()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	err := s.readList()
 	if err != nil {
 		log.Printf("Error occurred getting file: %v", err)
 		return err
 	}
 
-	if _, ok := store.List[id]; !ok {
+	if _, ok := s.store.List[id]; !ok {
 		return i.UserNotFound
 	}
 
-	delete(store.List, id)
+	delete(s.store.List, id)
 
-	if err = s.writeList(&store); err != nil {
+	if err = s.writeList(); err != nil {
 		log.Printf("Error occurred writing to file: %v", err)
 		return err
 	}

@@ -19,8 +19,7 @@ func (h handlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
+	render.Data(w, r, resp)
 }
 
 // CreateUser passes data to storage and creates new user
@@ -62,8 +61,7 @@ func (h handlers) GetUser(w http.ResponseWriter, r *http.Request) {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
 		return
 	case nil:
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(resp)
+		render.Data(w, r, resp)
 		return
 	default:
 		log.Printf("Error occurred getting user: %v", err)

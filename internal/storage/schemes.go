@@ -11,6 +11,6 @@ type User struct {
 type UserList map[string]User
 
 type UserStore struct {
-	Increment int      `json:"increment"`
+	Increment int64    `json:"increment"`
 	List      UserList `json:"list"`
 }
